@@ -819,7 +819,7 @@ Context* createContext(bx::AllocatorI* allocator, const ContextConfig* userCfg)
 	bx::memSet(&fontParams, 0, sizeof(fontParams));
 	fontParams.width = VG_CONFIG_MIN_FONT_ATLAS_SIZE;
 	fontParams.height = VG_CONFIG_MIN_FONT_ATLAS_SIZE;
-	fontParams.flags = FONS_ZERO_TOPLEFT;
+	fontParams.flags = FONS_ZERO_BOTTOMLEFT;
 #if FONS_CUSTOM_WHITE_RECT
 	// NOTE: White rect might get too large but since the atlas limit is the texture size limit
 	// it should be that large. Otherwise shapes cached when the atlas was 512x512 will get wrong
@@ -1128,11 +1128,11 @@ void end(Context* ctx)
 	const uint16_t canvasWidth = ctx->m_CanvasWidth;
 	const uint16_t canvasHeight = ctx->m_CanvasHeight;
 
-	float viewMtx[16];
-	float projMtx[16];
-	bx::mtxIdentity(viewMtx);
-	bx::mtxOrtho(projMtx, 0.0f, (float)canvasWidth, (float)canvasHeight, 0.0f, 0.0f, 1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
-	bgfx::setViewTransform(viewID, viewMtx, projMtx);
+//	float viewMtx[16];
+//	float projMtx[16];
+//	bx::mtxIdentity(viewMtx);
+//	bx::mtxOrtho(projMtx, 0.0f, (float)canvasWidth, 0.0f, (float)canvasHeight, 0.0f, 1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
+//	bgfx::setViewTransform(viewID, viewMtx, projMtx);
 
 	uint16_t prevScissorRect[4] = { 0, 0, canvasWidth, canvasHeight};
 	uint16_t prevScissorID = UINT16_MAX;
