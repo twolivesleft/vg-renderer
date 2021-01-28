@@ -1182,7 +1182,7 @@ void end(Context* ctx)
 
 					// TODO: Check if it's better to use Type_TexturedVertexColor program here to avoid too many 
 					// state switches.
-					bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Clip]);
+					bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Clip], UINT32_MAX/2);
 				}
 
 				stencilState = 0
@@ -1228,7 +1228,7 @@ void end(Context* ctx)
 				| BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 			bgfx::setStencil(stencilState);
 
-			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Textured]);
+			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Textured], UINT32_MAX/2);
 		} else if (cmd->m_Type == DrawCommand::Type::ColorGradient) {
 			VG_CHECK(cmd->m_HandleID != UINT16_MAX, "Invalid gradient handle");
 			Gradient* grad = &ctx->m_Gradients[cmd->m_HandleID];
@@ -1244,7 +1244,7 @@ void end(Context* ctx)
 				| BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 			bgfx::setStencil(stencilState);
 
-			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ColorGradient]);
+			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ColorGradient], UINT32_MAX/2);
 		} else if(cmd->m_Type == DrawCommand::Type::ImagePattern) {
 			VG_CHECK(cmd->m_HandleID != UINT16_MAX, "Invalid image pattern handle");
 			ImagePattern* imgPattern = &ctx->m_ImagePatterns[cmd->m_HandleID];
@@ -1261,7 +1261,7 @@ void end(Context* ctx)
 				| BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 			bgfx::setStencil(stencilState);
 
-			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ImagePattern]);
+			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ImagePattern], UINT32_MAX/2);
 		} else {
 			VG_CHECK(false, "Unknown draw command type");
 		}
