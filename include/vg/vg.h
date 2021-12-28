@@ -394,7 +394,7 @@ struct Context;
 Context* createContext(bx::AllocatorI* allocator, const ContextConfig* cfg = nullptr);
 void destroyContext(Context* ctx);
 
-void begin(Context* ctx, uint16_t viewID, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio);
+void begin(Context* ctx, uint16_t viewID, uint32_t depth, uint64_t blendState, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio);
 void end(Context* ctx);
 void frame(Context* ctx);
 const Stats* getStats(Context* ctx);

@@ -349,6 +349,8 @@ struct Context
 	float m_DevicePixelRatio;
 	float m_TesselationTolerance;
 	float m_FringeWidth;
+    uint32_t m_Depth;
+    uint64_t m_BlendState;
 
 	Stroker* m_Stroker;
 	Path* m_Path;
@@ -1015,7 +1017,7 @@ void destroyContext(Context* ctx)
 	BX_FREE(allocator, ctx);
 }
 
-void begin(Context* ctx, uint16_t viewID, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio)
+void begin(Context* ctx, uint16_t viewID, uint32_t depth, uint64_t blendState, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio)
 {
 	ctx->m_ViewID = viewID;
 	ctx->m_CanvasWidth = canvasWidth;
@@ -1024,6 +1026,16 @@ void begin(Context* ctx, uint16_t viewID, uint16_t canvasWidth, uint16_t canvasH
 	ctx->m_TesselationTolerance = 0.25f / devicePixelRatio;
 	ctx->m_FringeWidth = 1.0f / devicePixelRatio;
 	ctx->m_SubmitCmdListRecursionDepth = 0;
+    ctx->m_Depth = depth;
+    
+    if (blendState == BGFX_STATE_BLEND_NORMAL)
+        blendState = BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA,
+                                                    BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+
+        
+    ctx->m_BlendState = blendState;
+    
+    
 
 #if VG_CONFIG_COMMAND_LIST_BEGIN_END_API
 	ctx->m_VTable = &g_CtxVTable;
@@ -1206,14 +1218,14 @@ void end(Context* ctx)
 
 			bgfx::setVertexBuffer(2, &uvBuffers[cmd->m_VertexBufferID], cmd->m_FirstVertexID, cmd->m_NumVertices);
 			bgfx::setTexture(0, ctx->m_TexUniform, tex->m_bgfxHandle, tex->m_Flags);
-
+            
 			bgfx::setState(0
 				| BGFX_STATE_WRITE_A
 				| BGFX_STATE_WRITE_RGB
-				| BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+                | ctx->m_BlendState);
 			bgfx::setStencil(stencilState);
 
-			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Textured], UINT32_MAX/2);
+			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Textured], ctx->m_Depth);
 		} else if (cmd->m_Type == DrawCommand::Type::ColorGradient) {
 			VG_CHECK(cmd->m_HandleID != UINT16_MAX, "Invalid gradient handle");
 			Gradient* grad = &ctx->m_Gradients[cmd->m_HandleID];
@@ -1223,13 +1235,13 @@ void end(Context* ctx)
 			bgfx::setUniform(ctx->m_InnerColorUniform, grad->m_InnerColor, 1);
 			bgfx::setUniform(ctx->m_OuterColorUniform, grad->m_OuterColor, 1);
 
-			bgfx::setState(0
-				| BGFX_STATE_WRITE_A
-				| BGFX_STATE_WRITE_RGB
-				| BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+            bgfx::setState(0
+                | BGFX_STATE_WRITE_A
+                | BGFX_STATE_WRITE_RGB
+                | ctx->m_BlendState);
 			bgfx::setStencil(stencilState);
 
-			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ColorGradient], UINT32_MAX/2);
+			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ColorGradient], ctx->m_Depth);
 		} else if(cmd->m_Type == DrawCommand::Type::ImagePattern) {
 			VG_CHECK(cmd->m_HandleID != UINT16_MAX, "Invalid image pattern handle");
 			ImagePattern* imgPattern = &ctx->m_ImagePatterns[cmd->m_HandleID];
@@ -1240,13 +1252,13 @@ void end(Context* ctx)
 			bgfx::setTexture(0, ctx->m_TexUniform, tex->m_bgfxHandle, tex->m_Flags);
 			bgfx::setUniform(ctx->m_PaintMatUniform, imgPattern->m_Matrix, 1);
 
-			bgfx::setState(0
-				| BGFX_STATE_WRITE_A
-				| BGFX_STATE_WRITE_RGB
-				| BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+            bgfx::setState(0
+                | BGFX_STATE_WRITE_A
+                | BGFX_STATE_WRITE_RGB
+                | ctx->m_BlendState);
 			bgfx::setStencil(stencilState);
 
-			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ImagePattern], UINT32_MAX/2);
+			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ImagePattern], ctx->m_Depth);
 		} else {
 			VG_CHECK(false, "Unknown draw command type");
 		}
