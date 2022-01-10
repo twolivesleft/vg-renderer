@@ -453,7 +453,7 @@ float measureText(Context* ctx, const TextConfig& cfg, float x, float y, const c
 void measureTextBox(Context* ctx, const TextConfig& cfg, float x, float y, float breakWidth, const char* text, const char* end, float* bounds, uint32_t flags);
 float getTextLineHeight(Context* ctx, const TextConfig& cfg);
 int textBreakLines(Context* ctx, const TextConfig& cfg, const char* str, const char* end, float breakRowWidth, TextRow* rows, int maxRows, uint32_t flags);
-int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, const char* text, const char* end, GlyphPosition* positions, int maxPositions);
+int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, const char* text, const char* end, GlyphPosition* positions, int maxPositions, int start = 0);
 
 /*
  * pos: A list of 2D vertices (successive x,y pairs)

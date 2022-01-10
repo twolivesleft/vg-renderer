@@ -1787,9 +1787,9 @@ void measureTextBox(Context* ctx, const TextConfig& cfg, float x, float y, float
 	const uint32_t alignment = cfg.m_Alignment;
 
 	const uint32_t halign = alignment & (FONS_ALIGN_LEFT | FONS_ALIGN_CENTER | FONS_ALIGN_RIGHT);
-	const uint32_t valign = alignment & (FONS_ALIGN_TOP | FONS_ALIGN_MIDDLE | FONS_ALIGN_BOTTOM | FONS_ALIGN_BASELINE);
+	//const uint32_t valign = alignment & (FONS_ALIGN_TOP | FONS_ALIGN_MIDDLE | FONS_ALIGN_BOTTOM | FONS_ALIGN_BASELINE);
 
-	const uint32_t newAlignment = FONS_ALIGN_LEFT | valign;
+	const uint32_t newAlignment = FONS_ALIGN_LEFT | FONS_ALIGN_TOP;
 
 	FONScontext* fons = ctx->m_FontStashContext;
 	fonsSetAlign(fons, newAlignment);
@@ -1811,8 +1811,17 @@ void measureTextBox(Context* ctx, const TextConfig& cfg, float x, float y, float
 
 	TextRow rows[2];
 	int nrows = 0;
+    
+    const TextConfig newTextCfg = { cfg.m_FontHandle, cfg.m_FontSize, newAlignment, vg::Colors::Transparent };
+    
+    const char* temp = text;
+    int trows = 0;
+    while ((nrows = textBreakLines(ctx, newTextCfg, temp, end, breakWidth, rows, 2, flags))) {
+        trows += nrows;
+        temp = rows[nrows - 1].next;
+    }
+    y += lineh * trows;
 
-	const TextConfig newTextCfg = { cfg.m_FontHandle, cfg.m_FontSize, newAlignment, vg::Colors::Transparent };
 	while ((nrows = textBreakLines(ctx, newTextCfg, text, end, breakWidth, rows, 2, flags))) {
 		for (uint32_t i = 0; i < (uint32_t)nrows; i++) {
 			const TextRow* row = &rows[i];
@@ -1835,7 +1844,7 @@ void measureTextBox(Context* ctx, const TextConfig& cfg, float x, float y, float
 			miny = bx::min<float>(miny, y + rminy);
 			maxy = bx::max<float>(maxy, y + rmaxy);
 
-			y += lineh; // Assume line height multiplier of 1.0
+			y -= lineh; // Assume line height multiplier of 1.0
 		}
 
 		text = rows[nrows - 1].next;
@@ -2098,7 +2107,7 @@ int textBreakLines(Context* ctx, const TextConfig& cfg, const char* str, const c
 #undef CP_CHAR
 }
 
-int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, const char* str, const char* end, GlyphPosition* positions, int maxPositions)
+int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, const char* str, const char* end, GlyphPosition* positions, int maxPositions, int start)
 {
 	const State* state = getState(ctx);
 	const float scale = state->m_FontScale * ctx->m_DevicePixelRatio;
@@ -2128,8 +2137,14 @@ int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, co
 			iter = prevIter;
 			fonsTextIterNext(fons, &iter, &q);
 		}
-
+        
 		prevIter = iter;
+        
+        if (start > 0)
+        {
+            start--; continue;
+        }
+        
 		positions[npos].str = iter.str;
 		positions[npos].x = iter.x * invscale;
 		positions[npos].minx = bx::min<float>(iter.x, q.x0) * invscale;
@@ -4191,13 +4206,22 @@ static void ctxTextBox(Context* ctx, const TextConfig& cfg, float x, float y, fl
 
 	const uint32_t alignment = cfg.m_Alignment;
 	const int halign = alignment & (FONS_ALIGN_LEFT | FONS_ALIGN_CENTER | FONS_ALIGN_RIGHT);
-	const int valign = alignment & (FONS_ALIGN_TOP | FONS_ALIGN_MIDDLE | FONS_ALIGN_BOTTOM | FONS_ALIGN_BASELINE);
+	//const int valign = alignment & (FONS_ALIGN_TOP | FONS_ALIGN_MIDDLE | FONS_ALIGN_BOTTOM | FONS_ALIGN_BASELINE);
 	const float lineh = getTextLineHeight(ctx, cfg);
 
-	const TextConfig newCfg = makeTextConfig(ctx, cfg.m_FontHandle, cfg.m_FontSize, FONS_ALIGN_LEFT | valign, cfg.m_Color);
+	const TextConfig newCfg = makeTextConfig(ctx, cfg.m_FontHandle, cfg.m_FontSize, FONS_ALIGN_LEFT | FONS_ALIGN_TOP, cfg.m_Color);
 
 	TextRow rows[2];
 	int nrows;
+    
+    const char* temp = str;
+    int trows = 0;
+    while ((nrows = textBreakLines(ctx, cfg, temp, end, breakWidth, rows, 2, textboxFlags))) {
+        trows += nrows;
+        temp = rows[nrows - 1].next;
+    }
+    y += lineh * trows;
+    
 	while ((nrows = textBreakLines(ctx, cfg, str, end, breakWidth, rows, 2, textboxFlags))) {
 		for (int i = 0; i < nrows; ++i) {
 			TextRow* row = &rows[i];
@@ -4210,7 +4234,7 @@ static void ctxTextBox(Context* ctx, const TextConfig& cfg, float x, float y, fl
 				ctxText(ctx, newCfg, x + breakWidth - row->width, y, row->start, row->end);
 			}
 
-			y += lineh; // Assume line height multiplier to be 1.0 (NanoVG allows the user to change it, but I don't use it).
+			y -= lineh; // Assume line height multiplier to be 1.0 (NanoVG allows the user to change it, but I don't use it).
 		}
 
 		str = rows[nrows - 1].next;
