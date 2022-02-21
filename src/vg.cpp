@@ -1180,7 +1180,7 @@ void end(Context* ctx)
 
 					// TODO: Check if it's better to use Type_TexturedVertexColor program here to avoid too many 
 					// state switches.
-					bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Clip], UINT32_MAX/2);
+					bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Clip], ctx->m_Depth);
 				}
 
 				stencilState = 0
@@ -4156,7 +4156,7 @@ static void ctxText(Context* ctx, const TextConfig& cfg, float x, float y, const
 	FONScontext* fons = ctx->m_FontStashContext;
 	fonsSetSize(fons, scaledFontSize);
 	fonsSetFont(fons, cfg.m_FontHandle.idx);
-
+    fonsSetBlur(fons, cfg.m_Blur);
 	fonsResetString(fons, vgs, str, end);
 
 	int numBakedChars = fonsBakeString(fons, vgs);

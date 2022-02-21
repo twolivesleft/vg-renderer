@@ -342,6 +342,7 @@ struct TextConfig
 	float m_FontSize;
 	uint32_t m_Alignment;
 	Color m_Color;
+    float m_Blur;
 };
 
 struct Mesh
@@ -534,8 +535,8 @@ void clSubmitCommandList(Context* ctx, CommandListHandle parent, CommandListHand
 //////////////////////////////////////////////////////////////////////////
 // Helpers
 //
-TextConfig makeTextConfig(Context* ctx, const char* fontName, float fontSize, uint32_t alignment, Color color);
-TextConfig makeTextConfig(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color);
+TextConfig makeTextConfig(Context* ctx, const char* fontName, float fontSize, uint32_t alignment, Color color, float blur = 0);
+TextConfig makeTextConfig(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color, float blur = 0);
 void text(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color, float x, float y, const char* str, const char* end);
 void textBox(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color, float x, float y, float breakWidth, const char* str, const char* end, uint32_t textboxFlags);
 float measureText(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, float x, float y, const char* str, const char* end, float* bounds);

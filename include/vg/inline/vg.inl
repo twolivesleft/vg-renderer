@@ -82,15 +82,15 @@ inline uint8_t colorGetBlue(Color c)
 }
 
 // Text helpers
-inline TextConfig makeTextConfig(Context* ctx, const char* fontName, float fontSize, uint32_t alignment, Color color)
+inline TextConfig makeTextConfig(Context* ctx, const char* fontName, float fontSize, uint32_t alignment, Color color, float blur)
 {
-	return { getFontByName(ctx, fontName), fontSize, alignment, color };
+	return { getFontByName(ctx, fontName), fontSize, alignment, color, blur };
 }
 
-inline TextConfig makeTextConfig(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color)
+inline TextConfig makeTextConfig(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color, float blur)
 {
 	BX_UNUSED(ctx);
-	return { fontHandle, fontSize, alignment, color };
+	return { fontHandle, fontSize, alignment, color, blur };
 }
 
 inline void text(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color, float x, float y, const char* str, const char* end)
