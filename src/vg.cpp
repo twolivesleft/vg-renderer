@@ -3937,8 +3937,8 @@ static void ctxResetScissor(Context* ctx)
 {
 	State* state = getState(ctx);
 	state->m_ScissorRect[0] = state->m_ScissorRect[1] = 0.0f;
-	state->m_ScissorRect[2] = (float)ctx->m_CanvasWidth;
-	state->m_ScissorRect[3] = (float)ctx->m_CanvasHeight;
+	state->m_ScissorRect[2] = (float)ctx->m_CanvasWidth * ctx->m_DevicePixelRatio;
+	state->m_ScissorRect[3] = (float)ctx->m_CanvasHeight * ctx->m_DevicePixelRatio;
 	ctx->m_ForceNewDrawCommand = true;
 	ctx->m_ForceNewClipCommand = true;
 }
@@ -3947,8 +3947,8 @@ static void ctxSetScissor(Context* ctx, float x, float y, float w, float h)
 {
 	State* state = getState(ctx);
 	const float* stateTransform = state->m_TransformMtx;
-	const float canvasWidth = (float)ctx->m_CanvasWidth;
-	const float canvasHeight = (float)ctx->m_CanvasHeight;
+	const float canvasWidth = (float)ctx->m_CanvasWidth * ctx->m_DevicePixelRatio;
+	const float canvasHeight = (float)ctx->m_CanvasHeight * ctx->m_DevicePixelRatio;
 
 	float pos[2], size[2];
 	vgutil::transformPos2D(x, y, stateTransform, &pos[0]);
