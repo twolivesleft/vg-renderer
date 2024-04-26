@@ -3946,13 +3946,11 @@ static void ctxResetScissor(Context* ctx)
 static void ctxSetScissor(Context* ctx, float x, float y, float w, float h)
 {
 	State* state = getState(ctx);
-	const float* stateTransform = state->m_TransformMtx;
 	const float canvasWidth = (float)ctx->m_CanvasWidth * ctx->m_DevicePixelRatio;
 	const float canvasHeight = (float)ctx->m_CanvasHeight * ctx->m_DevicePixelRatio;
 
-	float pos[2], size[2];
-	vgutil::transformPos2D(x, y, stateTransform, &pos[0]);
-	vgutil::transformVec2D(w, h, stateTransform, &size[0]);
+    float pos[2] {x * (float)ctx->m_DevicePixelRatio, y * (float)ctx->m_DevicePixelRatio};
+    float size[2] {w * (float)ctx->m_DevicePixelRatio, h * (float)ctx->m_DevicePixelRatio};
 
 	const float minx = bx::clamp<float>(pos[0], 0.0f, canvasWidth);
 	const float miny = bx::clamp<float>(pos[1], 0.0f, canvasHeight);
