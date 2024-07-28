@@ -352,6 +352,8 @@ struct Context
 	float m_DevicePixelRatio;
 	float m_TesselationTolerance;
 	float m_FringeWidth;
+    uint32_t m_Depth;
+    uint64_t m_BlendState;
 
 	Stroker* m_Stroker;
 	Path* m_Path;
@@ -826,7 +828,7 @@ Context* createContext(bx::AllocatorI* allocator, const ContextConfig* userCfg)
 	bx::memSet(&fontParams, 0, sizeof(fontParams));
 	fontParams.width = VG_CONFIG_MIN_FONT_ATLAS_SIZE;
 	fontParams.height = VG_CONFIG_MIN_FONT_ATLAS_SIZE;
-	fontParams.flags = FONS_ZERO_TOPLEFT;
+	fontParams.flags = FONS_ZERO_BOTTOMLEFT;
 #if FONS_CUSTOM_WHITE_RECT
 	// NOTE: White rect might get too large but since the atlas limit is the texture size limit
 	// it should be that large. Otherwise shapes cached when the atlas was 512x512 will get wrong
@@ -1030,7 +1032,7 @@ void destroyContext(Context* ctx)
 	bx::alignedFree(allocator, ctx, 8);
 }
 
-void begin(Context* ctx, uint16_t viewID, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio)
+void begin(Context* ctx, uint16_t viewID, uint32_t depth, uint64_t blendState, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio)
 {
 	ctx->m_ViewID = viewID;
 	ctx->m_CanvasWidth = canvasWidth;
@@ -1039,6 +1041,16 @@ void begin(Context* ctx, uint16_t viewID, uint16_t canvasWidth, uint16_t canvasH
 	ctx->m_TesselationTolerance = 0.25f / devicePixelRatio;
 	ctx->m_FringeWidth = 1.0f / devicePixelRatio;
 	ctx->m_SubmitCmdListRecursionDepth = 0;
+    ctx->m_Depth = depth;
+    
+    if (blendState == BGFX_STATE_BLEND_NORMAL)
+        blendState = BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA,
+                                                    BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+
+        
+    ctx->m_BlendState = blendState;
+    
+    
 
 #if VG_CONFIG_COMMAND_LIST_BEGIN_END_API
 	ctx->m_VTable = &g_CtxVTable;
@@ -1095,60 +1107,46 @@ void end(Context* ctx)
 
 	flushTextAtlas(ctx);
 
+        
 	// Update bgfx vertex buffers...
 	const uint32_t numVertexBuffers = ctx->m_NumVertexBuffers;
-	for (uint32_t iVB = ctx->m_FirstVertexBufferID; iVB < numVertexBuffers; ++iVB) {
-		VertexBuffer* vb = &ctx->m_VertexBuffers[iVB];
-		GPUVertexBuffer* gpuvb = &ctx->m_GPUVertexBuffers[iVB];
-		
-		const uint32_t maxVBVertices = ctx->m_Config.m_MaxVBVertices;
-		if (!bgfx::isValid(gpuvb->m_PosBufferHandle)) {
-			gpuvb->m_PosBufferHandle = bgfx::createDynamicVertexBuffer(maxVBVertices, ctx->m_PosVertexDecl, 0);
-		}
-		if (!bgfx::isValid(gpuvb->m_UVBufferHandle)) {
-			gpuvb->m_UVBufferHandle = bgfx::createDynamicVertexBuffer(maxVBVertices, ctx->m_UVVertexDecl, 0);
-		}
-		if (!bgfx::isValid(gpuvb->m_ColorBufferHandle)) {
-			gpuvb->m_ColorBufferHandle = bgfx::createDynamicVertexBuffer(maxVBVertices, ctx->m_ColorVertexDecl, 0);
-		}
+    
+    bgfx::TransientVertexBuffer posBuffers[numVertexBuffers];
+    bgfx::TransientVertexBuffer uvBuffers[numVertexBuffers];
+    bgfx::TransientVertexBuffer colorBuffers[numVertexBuffers];
+    bgfx::TransientIndexBuffer indexBuffer;
+    
+    for (uint32_t iVB = ctx->m_FirstVertexBufferID; iVB < numVertexBuffers; ++iVB) {
+        VertexBuffer* vb = &ctx->m_VertexBuffers[iVB];
 
-		const bgfx::Memory* posMem = bgfx::makeRef(vb->m_Pos, sizeof(float) * 2 * vb->m_Count, releaseVertexBufferDataCallback_Vec2, ctx);
-		const bgfx::Memory* colorMem = bgfx::makeRef(vb->m_Color, sizeof(uint32_t) * vb->m_Count, releaseVertexBufferDataCallback_Uint32, ctx);
-#if VG_CONFIG_UV_INT16
-		const bgfx::Memory* uvMem = bgfx::makeRef(vb->m_UV, sizeof(int16_t) * 2 * vb->m_Count, releaseVertexBufferDataCallback_UV, ctx);
-#else
-		const bgfx::Memory* uvMem = bgfx::makeRef(vb->m_UV, sizeof(float) * 2 * vb->m_Count, releaseVertexBufferDataCallback_Vec2, ctx);
-#endif
-
-		bgfx::update(gpuvb->m_PosBufferHandle, 0, posMem);
-		bgfx::update(gpuvb->m_UVBufferHandle, 0, uvMem);
-		bgfx::update(gpuvb->m_ColorBufferHandle, 0, colorMem);
-
-		vb->m_Pos = nullptr;
-		vb->m_UV = nullptr;
-		vb->m_Color = nullptr;
-	}
-
-	// Update bgfx index buffer...
-	IndexBuffer* ib = &ctx->m_IndexBuffers[ctx->m_ActiveIndexBufferID];
-	GPUIndexBuffer* gpuib = &ctx->m_GPUIndexBuffers[ctx->m_ActiveIndexBufferID];
-	const bgfx::Memory* indexMem = bgfx::makeRef(&ib->m_Indices[0], sizeof(uint16_t) * ib->m_Count, releaseIndexBufferCallback, ctx);
-	if (!bgfx::isValid(gpuib->m_bgfxHandle)) {
-		gpuib->m_bgfxHandle = bgfx::createDynamicIndexBuffer(indexMem, BGFX_BUFFER_ALLOW_RESIZE);
-	} else {
-		bgfx::update(gpuib->m_bgfxHandle, 0, indexMem);
-	}
+        bgfx::allocTransientVertexBuffer(&posBuffers[iVB], vb->m_Count, ctx->m_PosVertexDecl);
+        bx::memCopy(posBuffers[iVB].data, vb->m_Pos, sizeof(float) * 2 * vb->m_Count);
+        releaseVertexBufferData_Vec2(ctx, vb->m_Pos);
+        
+        bgfx::allocTransientVertexBuffer(&uvBuffers[iVB], vb->m_Count, ctx->m_UVVertexDecl);
+        bx::memCopy(uvBuffers[iVB].data, vb->m_UV, sizeof(int16_t) * 2 * vb->m_Count);
+        releaseVertexBufferData_UV(ctx, vb->m_UV);
+        
+        bgfx::allocTransientVertexBuffer(&colorBuffers[iVB], vb->m_Count, ctx->m_ColorVertexDecl);
+        bx::memCopy(colorBuffers[iVB].data, vb->m_Color, sizeof(uint32_t) * vb->m_Count);
+        releaseVertexBufferData_Uint32(ctx, vb->m_Color);
+    }
+    
+    IndexBuffer* ib = &ctx->m_IndexBuffers[ctx->m_ActiveIndexBufferID];
+    bgfx::allocTransientIndexBuffer(&indexBuffer, ib->m_Count);
+    bx::memCopy(indexBuffer.data, ib->m_Indices, sizeof(int16_t) * ib->m_Count);
+    releaseIndexBuffer(ctx, ib->m_Indices);
 
 	const uint16_t viewID = ctx->m_ViewID;
 	const uint16_t canvasWidth = ctx->m_CanvasWidth;
 	const uint16_t canvasHeight = ctx->m_CanvasHeight;
 	const float devicePixelRatio = ctx->m_DevicePixelRatio;
 
-	float viewMtx[16];
-	float projMtx[16];
-	bx::mtxIdentity(viewMtx);
-	bx::mtxOrtho(projMtx, 0.0f, (float)canvasWidth, (float)canvasHeight, 0.0f, 0.0f, 1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
-	bgfx::setViewTransform(viewID, viewMtx, projMtx);
+//	float viewMtx[16];
+//	float projMtx[16];
+//	bx::mtxIdentity(viewMtx);
+//	bx::mtxOrtho(projMtx, 0.0f, (float)canvasWidth, 0.0f, (float)canvasHeight, 0.0f, 1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
+//	bgfx::setViewTransform(viewID, viewMtx, projMtx);
 
 	uint16_t prevScissorRect[4] = { 0, 0, canvasWidth, canvasHeight};
 	uint16_t prevScissorID = UINT16_MAX;
@@ -1169,9 +1167,9 @@ void end(Context* ctx)
 
 					DrawCommand* clipCmd = &ctx->m_ClipCommands[cmdClipState->m_FirstCmdID + iClip];
 
-					GPUVertexBuffer* gpuvb = &ctx->m_GPUVertexBuffers[clipCmd->m_VertexBufferID];
-					bgfx::setVertexBuffer(0, gpuvb->m_PosBufferHandle, clipCmd->m_FirstVertexID, clipCmd->m_NumVertices);
-					bgfx::setIndexBuffer(gpuib->m_bgfxHandle, clipCmd->m_FirstIndexID, clipCmd->m_NumIndices);
+					//GPUVertexBuffer* gpuvb = &ctx->m_GPUVertexBuffers[clipCmd->m_VertexBufferID];
+                    bgfx::setVertexBuffer(0, &posBuffers[cmd->m_VertexBufferID], clipCmd->m_FirstVertexID, clipCmd->m_NumVertices);
+					bgfx::setIndexBuffer(&indexBuffer, clipCmd->m_FirstIndexID, clipCmd->m_NumIndices);
 
 					// Set scissor.
 					{
@@ -1198,7 +1196,7 @@ void end(Context* ctx)
 
 					// TODO: Check if it's better to use Type_TexturedVertexColor program here to avoid too many 
 					// state switches.
-					bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Clip]);
+					bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Clip], ctx->m_Depth);
 				}
 
 				stencilState = 0
@@ -1215,10 +1213,9 @@ void end(Context* ctx)
 			}
 		}
 
-		GPUVertexBuffer* gpuvb = &ctx->m_GPUVertexBuffers[cmd->m_VertexBufferID];
-		bgfx::setVertexBuffer(0, gpuvb->m_PosBufferHandle, cmd->m_FirstVertexID, cmd->m_NumVertices);
-		bgfx::setVertexBuffer(1, gpuvb->m_ColorBufferHandle, cmd->m_FirstVertexID, cmd->m_NumVertices);
-		bgfx::setIndexBuffer(gpuib->m_bgfxHandle, cmd->m_FirstIndexID, cmd->m_NumIndices);
+        bgfx::setVertexBuffer(0, &posBuffers[cmd->m_VertexBufferID], cmd->m_FirstVertexID, cmd->m_NumVertices);
+		bgfx::setVertexBuffer(1, &colorBuffers[cmd->m_VertexBufferID], cmd->m_FirstVertexID, cmd->m_NumVertices);
+		bgfx::setIndexBuffer(&indexBuffer, cmd->m_FirstIndexID, cmd->m_NumIndices);
 
 		// Set scissor.
 		{
@@ -1235,16 +1232,16 @@ void end(Context* ctx)
 			VG_CHECK(cmd->m_HandleID != UINT16_MAX, "Invalid image handle");
 			Image* tex = &ctx->m_Images[cmd->m_HandleID];
 
-			bgfx::setVertexBuffer(2, gpuvb->m_UVBufferHandle, cmd->m_FirstVertexID, cmd->m_NumVertices);
+			bgfx::setVertexBuffer(2, &uvBuffers[cmd->m_VertexBufferID], cmd->m_FirstVertexID, cmd->m_NumVertices);
 			bgfx::setTexture(0, ctx->m_TexUniform, tex->m_bgfxHandle, tex->m_Flags);
-
+            
 			bgfx::setState(0
 				| BGFX_STATE_WRITE_A
 				| BGFX_STATE_WRITE_RGB
-				| BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+                | ctx->m_BlendState);
 			bgfx::setStencil(stencilState);
 
-			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Textured]);
+			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Textured], ctx->m_Depth);
 		} else if (cmd->m_Type == DrawCommand::Type::ColorGradient) {
 			VG_CHECK(cmd->m_HandleID != UINT16_MAX, "Invalid gradient handle");
 			Gradient* grad = &ctx->m_Gradients[cmd->m_HandleID];
@@ -1254,13 +1251,13 @@ void end(Context* ctx)
 			bgfx::setUniform(ctx->m_InnerColorUniform, grad->m_InnerColor, 1);
 			bgfx::setUniform(ctx->m_OuterColorUniform, grad->m_OuterColor, 1);
 
-			bgfx::setState(0
-				| BGFX_STATE_WRITE_A
-				| BGFX_STATE_WRITE_RGB
-				| BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+            bgfx::setState(0
+                | BGFX_STATE_WRITE_A
+                | BGFX_STATE_WRITE_RGB
+                | ctx->m_BlendState);
 			bgfx::setStencil(stencilState);
 
-			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ColorGradient]);
+			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ColorGradient], ctx->m_Depth);
 		} else if(cmd->m_Type == DrawCommand::Type::ImagePattern) {
 			VG_CHECK(cmd->m_HandleID != UINT16_MAX, "Invalid image pattern handle");
 			ImagePattern* imgPattern = &ctx->m_ImagePatterns[cmd->m_HandleID];
@@ -1271,17 +1268,18 @@ void end(Context* ctx)
 			bgfx::setTexture(0, ctx->m_TexUniform, tex->m_bgfxHandle, tex->m_Flags);
 			bgfx::setUniform(ctx->m_PaintMatUniform, imgPattern->m_Matrix, 1);
 
-			bgfx::setState(0
-				| BGFX_STATE_WRITE_A
-				| BGFX_STATE_WRITE_RGB
-				| BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+            bgfx::setState(0
+                | BGFX_STATE_WRITE_A
+                | BGFX_STATE_WRITE_RGB
+                | ctx->m_BlendState);
 			bgfx::setStencil(stencilState);
 
-			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ImagePattern]);
+			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ImagePattern], ctx->m_Depth);
 		} else {
 			VG_CHECK(false, "Unknown draw command type");
 		}
 	}
+
 }
 
 void frame(Context* ctx)
@@ -1808,9 +1806,9 @@ void measureTextBox(Context* ctx, const TextConfig& cfg, float x, float y, float
 	const uint32_t alignment = cfg.m_Alignment;
 
 	const uint32_t halign = alignment & (FONS_ALIGN_LEFT | FONS_ALIGN_CENTER | FONS_ALIGN_RIGHT);
-	const uint32_t valign = alignment & (FONS_ALIGN_TOP | FONS_ALIGN_MIDDLE | FONS_ALIGN_BOTTOM | FONS_ALIGN_BASELINE);
+	//const uint32_t valign = alignment & (FONS_ALIGN_TOP | FONS_ALIGN_MIDDLE | FONS_ALIGN_BOTTOM | FONS_ALIGN_BASELINE);
 
-	const uint32_t newAlignment = FONS_ALIGN_LEFT | valign;
+	const uint32_t newAlignment = FONS_ALIGN_LEFT | FONS_ALIGN_TOP;
 
 	FONScontext* fons = ctx->m_FontStashContext;
 	fonsSetAlign(fons, newAlignment);
@@ -1832,8 +1830,17 @@ void measureTextBox(Context* ctx, const TextConfig& cfg, float x, float y, float
 
 	TextRow rows[2];
 	int nrows = 0;
+    
+    const TextConfig newTextCfg = { cfg.m_FontHandle, cfg.m_FontSize, newAlignment, vg::Colors::Transparent };
+    
+    const char* temp = text;
+    int trows = 0;
+    while ((nrows = textBreakLines(ctx, newTextCfg, temp, end, breakWidth, rows, 2, flags))) {
+        trows += nrows;
+        temp = rows[nrows - 1].next;
+    }
+    y += lineh * trows;
 
-	const TextConfig newTextCfg = { cfg.m_FontHandle, cfg.m_FontSize, newAlignment, vg::Colors::Transparent };
 	while ((nrows = textBreakLines(ctx, newTextCfg, text, end, breakWidth, rows, 2, flags))) {
 		for (uint32_t i = 0; i < (uint32_t)nrows; i++) {
 			const TextRow* row = &rows[i];
@@ -1856,7 +1863,7 @@ void measureTextBox(Context* ctx, const TextConfig& cfg, float x, float y, float
 			miny = bx::min<float>(miny, y + rminy);
 			maxy = bx::max<float>(maxy, y + rmaxy);
 
-			y += lineh; // Assume line height multiplier of 1.0
+			y -= lineh; // Assume line height multiplier of 1.0
 		}
 
 		text = rows[nrows - 1].next;
@@ -2119,7 +2126,7 @@ int textBreakLines(Context* ctx, const TextConfig& cfg, const char* str, const c
 #undef CP_CHAR
 }
 
-int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, const char* str, const char* end, GlyphPosition* positions, int maxPositions)
+int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, const char* str, const char* end, GlyphPosition* positions, int maxPositions, int start)
 {
 	const State* state = getState(ctx);
 	const float scale = state->m_FontScale * ctx->m_DevicePixelRatio;
@@ -2149,8 +2156,14 @@ int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, co
 			iter = prevIter;
 			fonsTextIterNext(fons, &iter, &q);
 		}
-
+        
 		prevIter = iter;
+        
+        if (start > 0)
+        {
+            start--; continue;
+        }
+        
 		positions[npos].str = iter.str;
 		positions[npos].x = iter.x * invscale;
 		positions[npos].minx = bx::min<float>(iter.x, q.x0) * invscale;
@@ -3966,8 +3979,8 @@ static void ctxResetScissor(Context* ctx)
 {
 	State* state = getState(ctx);
 	state->m_ScissorRect[0] = state->m_ScissorRect[1] = 0.0f;
-	state->m_ScissorRect[2] = (float)ctx->m_CanvasWidth;
-	state->m_ScissorRect[3] = (float)ctx->m_CanvasHeight;
+	state->m_ScissorRect[2] = (float)ctx->m_CanvasWidth * ctx->m_DevicePixelRatio;
+	state->m_ScissorRect[3] = (float)ctx->m_CanvasHeight * ctx->m_DevicePixelRatio;
 	ctx->m_ForceNewDrawCommand = true;
 	ctx->m_ForceNewClipCommand = true;
 }
@@ -3975,13 +3988,11 @@ static void ctxResetScissor(Context* ctx)
 static void ctxSetScissor(Context* ctx, float x, float y, float w, float h)
 {
 	State* state = getState(ctx);
-	const float* stateTransform = state->m_TransformMtx;
-	const float canvasWidth = (float)ctx->m_CanvasWidth;
-	const float canvasHeight = (float)ctx->m_CanvasHeight;
+	const float canvasWidth = (float)ctx->m_CanvasWidth * ctx->m_DevicePixelRatio;
+	const float canvasHeight = (float)ctx->m_CanvasHeight * ctx->m_DevicePixelRatio;
 
-	float pos[2], size[2];
-	vgutil::transformPos2D(x, y, stateTransform, &pos[0]);
-	vgutil::transformVec2D(w, h, stateTransform, &size[0]);
+    float pos[2] {x * (float)ctx->m_DevicePixelRatio, y * (float)ctx->m_DevicePixelRatio};
+    float size[2] {w * (float)ctx->m_DevicePixelRatio, h * (float)ctx->m_DevicePixelRatio};
 
 	const float minx = bx::clamp<float>(pos[0], 0.0f, canvasWidth);
 	const float miny = bx::clamp<float>(pos[1], 0.0f, canvasHeight);
@@ -4191,7 +4202,7 @@ static void ctxText(Context* ctx, const TextConfig& cfg, float x, float y, const
 	FONScontext* fons = ctx->m_FontStashContext;
 	fonsSetSize(fons, scaledFontSize);
 	fonsSetFont(fons, cfg.m_FontHandle.idx);
-
+    fonsSetBlur(fons, cfg.m_Blur);
 	fonsResetString(fons, vgs, str, end);
 
 	int numBakedChars = fonsBakeString(fons, vgs);
@@ -4241,13 +4252,22 @@ static void ctxTextBox(Context* ctx, const TextConfig& cfg, float x, float y, fl
 
 	const uint32_t alignment = cfg.m_Alignment;
 	const int halign = alignment & (FONS_ALIGN_LEFT | FONS_ALIGN_CENTER | FONS_ALIGN_RIGHT);
-	const int valign = alignment & (FONS_ALIGN_TOP | FONS_ALIGN_MIDDLE | FONS_ALIGN_BOTTOM | FONS_ALIGN_BASELINE);
+	//const int valign = alignment & (FONS_ALIGN_TOP | FONS_ALIGN_MIDDLE | FONS_ALIGN_BOTTOM | FONS_ALIGN_BASELINE);
 	const float lineh = getTextLineHeight(ctx, cfg);
 
-	const TextConfig newCfg = makeTextConfig(ctx, cfg.m_FontHandle, cfg.m_FontSize, FONS_ALIGN_LEFT | valign, cfg.m_Color);
+	const TextConfig newCfg = makeTextConfig(ctx, cfg.m_FontHandle, cfg.m_FontSize, FONS_ALIGN_LEFT | FONS_ALIGN_TOP, cfg.m_Color);
 
 	TextRow rows[2];
 	int nrows;
+    
+    const char* temp = str;
+    int trows = 0;
+    while ((nrows = textBreakLines(ctx, cfg, temp, end, breakWidth, rows, 2, textboxFlags))) {
+        trows += nrows;
+        temp = rows[nrows - 1].next;
+    }
+    y += lineh * trows;
+    
 	while ((nrows = textBreakLines(ctx, cfg, str, end, breakWidth, rows, 2, textboxFlags))) {
 		for (int i = 0; i < nrows; ++i) {
 			TextRow* row = &rows[i];
@@ -4260,7 +4280,7 @@ static void ctxTextBox(Context* ctx, const TextConfig& cfg, float x, float y, fl
 				ctxText(ctx, newCfg, x + breakWidth - row->width, y, row->start, row->end);
 			}
 
-			y += lineh; // Assume line height multiplier to be 1.0 (NanoVG allows the user to change it, but I don't use it).
+			y -= lineh; // Assume line height multiplier to be 1.0 (NanoVG allows the user to change it, but I don't use it).
 		}
 
 		str = rows[nrows - 1].next;

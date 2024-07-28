@@ -347,6 +347,7 @@ struct TextConfig
 	float m_FontSize;
 	uint32_t m_Alignment;
 	Color m_Color;
+    float m_Blur;
 };
 
 struct Mesh
@@ -401,7 +402,7 @@ struct Context;
 Context* createContext(bx::AllocatorI* allocator, const ContextConfig* cfg = nullptr);
 void destroyContext(Context* ctx);
 
-void begin(Context* ctx, uint16_t viewID, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio);
+void begin(Context* ctx, uint16_t viewID, uint32_t depth, uint64_t blendState, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio);
 void end(Context* ctx);
 void frame(Context* ctx);
 const Stats* getStats(Context* ctx);
@@ -460,7 +461,7 @@ float measureText(Context* ctx, const TextConfig& cfg, float x, float y, const c
 void measureTextBox(Context* ctx, const TextConfig& cfg, float x, float y, float breakWidth, const char* text, const char* end, float* bounds, uint32_t flags);
 float getTextLineHeight(Context* ctx, const TextConfig& cfg);
 int textBreakLines(Context* ctx, const TextConfig& cfg, const char* str, const char* end, float breakRowWidth, TextRow* rows, int maxRows, uint32_t flags);
-int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, const char* text, const char* end, GlyphPosition* positions, int maxPositions);
+int textGlyphPositions(Context* ctx, const TextConfig& cfg, float x, float y, const char* text, const char* end, GlyphPosition* positions, int maxPositions, int start = 0);
 
 /*
  * pos: A list of 2D vertices (successive x,y pairs)
@@ -542,8 +543,8 @@ void clSubmitCommandList(Context* ctx, CommandListHandle parent, CommandListHand
 //////////////////////////////////////////////////////////////////////////
 // Helpers
 //
-TextConfig makeTextConfig(Context* ctx, const char* fontName, float fontSize, uint32_t alignment, Color color);
-TextConfig makeTextConfig(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color);
+TextConfig makeTextConfig(Context* ctx, const char* fontName, float fontSize, uint32_t alignment, Color color, float blur = 0);
+TextConfig makeTextConfig(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color, float blur = 0);
 void text(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color, float x, float y, const char* str, const char* end);
 void textBox(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, Color color, float x, float y, float breakWidth, const char* str, const char* end, uint32_t textboxFlags);
 float measureText(Context* ctx, FontHandle fontHandle, float fontSize, uint32_t alignment, float x, float y, const char* str, const char* end, float* bounds);
