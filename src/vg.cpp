@@ -1147,7 +1147,7 @@ void end(Context* ctx)
 	float viewMtx[16];
 	float projMtx[16];
 	bx::mtxIdentity(viewMtx);
-	bx::mtxOrtho(projMtx, 0.0f, (float)canvasWidth, (float)canvasHeight, 0.0f, 0.0f, 1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
+    bx::mtxOrtho(projMtx, 0.0f, (float)canvasWidth, 0.0f, (float)canvasHeight, -1.0f, 1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
 	bgfx::setViewTransform(viewID, viewMtx, projMtx);
 
 	uint16_t prevScissorRect[4] = { 0, 0, canvasWidth, canvasHeight};
