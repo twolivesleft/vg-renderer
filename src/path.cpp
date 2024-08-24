@@ -22,7 +22,7 @@ static void pathAddVertex(Path* path, float x, float y);
 
 Path* createPath(bx::AllocatorI* allocator)
 {
-	Path* path = (Path*)BX_ALLOC(allocator, sizeof(Path));
+	Path* path = (Path*)bx::alloc(allocator, sizeof(Path));
 	bx::memSet(path, 0, sizeof(Path));
 	path->m_Allocator = allocator;
 	path->m_Scale = 1.0f;
@@ -34,9 +34,11 @@ void destroyPath(Path* path)
 {
 	bx::AllocatorI* allocator = path->m_Allocator;
 
-	BX_ALIGNED_FREE(allocator, path->m_Vertices, 16);
-	BX_FREE(allocator, path->m_SubPaths);
-	BX_FREE(allocator, path);
+    if (path->m_Vertices) {
+        bx::alignedFree(allocator, path->m_Vertices, 16);
+    }
+	bx::free(allocator, path->m_SubPaths);
+	bx::free(allocator, path);
 }
 
 void pathReset(Path* path, float scale, float tesselationTolerance)
@@ -46,7 +48,7 @@ void pathReset(Path* path, float scale, float tesselationTolerance)
 
 	if (path->m_SubPathCapacity == 0) {
 		path->m_SubPathCapacity = 16;
-		path->m_SubPaths = (SubPath*)BX_ALLOC(path->m_Allocator, sizeof(SubPath) * path->m_SubPathCapacity);
+		path->m_SubPaths = (SubPath*)bx::alloc(path->m_Allocator, sizeof(SubPath) * path->m_SubPathCapacity);
 	}
 
 	path->m_NumSubPaths = 0;
@@ -63,7 +65,7 @@ void pathMoveTo(Path* path, float x, float y)
 		// Move on to the next sub path.
 		if (path->m_NumSubPaths + 1 > path->m_SubPathCapacity) {
 			path->m_SubPathCapacity += 16;
-			path->m_SubPaths = (SubPath*)BX_REALLOC(path->m_Allocator, path->m_SubPaths, sizeof(SubPath) * path->m_SubPathCapacity);
+			path->m_SubPaths = (SubPath*)bx::realloc(path->m_Allocator, path->m_SubPaths, sizeof(SubPath) * path->m_SubPathCapacity);
 		}
 
 		path->m_CurSubPath = &path->m_SubPaths[path->m_NumSubPaths++];
@@ -632,22 +634,18 @@ void pathArc(Path* path, float cx, float cy, float r, float a0, float a1, Windin
 		a1 -= bx::kPi2;
 	}
 
-	if (a1 < a0) {
-		bx::swap<float>(a0, a1);
-	}
-
 	if (dir == Winding::CCW) {
 		while (a0 < a1) {
 			a0 += bx::kPi2;
 		}
-
-		bx::swap<float>(a0, a1);
 	} else {
-		// CW order should be taken care from the common code at the top.
+		while (a1 < a0) {
+			a1 += bx::kPi2;
+		}
 	}
 
 	const float da = bx::acos((path->m_Scale * r) / ((path->m_Scale * r) + path->m_TesselationTolerance)) * 2.0f;
-	const uint32_t numPoints = bx::uint32_max(2, (uint32_t)bx::ceil((a1 - a0) / da));
+	const uint32_t numPoints = bx::uint32_max(2, (uint32_t)bx::ceil(bx::abs(a1 - a0) / da));
 
 	const float dtheta = (a1 - a0) / (float)numPoints;
 	const float cos_dtheta = bx::cos(dtheta);
@@ -744,7 +742,7 @@ static float* pathAllocVertices(Path* path, uint32_t n)
 {
 	if (path->m_NumVertices + n > path->m_VertexCapacity) {
 		path->m_VertexCapacity = bx::uint32_max(path->m_VertexCapacity + n, path->m_VertexCapacity != 0 ? (path->m_VertexCapacity * 3) >> 1 : 16);
-		path->m_Vertices = (float*)BX_ALIGNED_REALLOC(path->m_Allocator, path->m_Vertices, sizeof(float) * 2 * path->m_VertexCapacity, 16);
+		path->m_Vertices = (float*)bx::alignedRealloc(path->m_Allocator, path->m_Vertices, sizeof(float) * 2 * path->m_VertexCapacity, 16);
 	}
 
 	float* p = &path->m_Vertices[path->m_NumVertices << 1];
@@ -759,6 +757,7 @@ static void pathAddVertex(Path* path, float x, float y)
 	VG_CHECK(path->m_CurSubPath, "No path");
 	VG_CHECK(!path->m_CurSubPath->m_IsClosed, "Cannot add new vertices to a closed path");
 
+#if 0
 	if (path->m_CurSubPath->m_NumVertices != 0) {
 		const uint32_t lastVertexID = path->m_CurSubPath->m_FirstVertexID + (path->m_CurSubPath->m_NumVertices - 1);
 		const float* lastVertex = &path->m_Vertices[lastVertexID << 1];
@@ -770,6 +769,7 @@ static void pathAddVertex(Path* path, float x, float y)
 			return;
 		}
 	}
+#endif
 
 	float* v = pathAllocVertices(path, 1);
 	v[0] = x;
