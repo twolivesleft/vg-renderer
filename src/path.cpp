@@ -757,7 +757,7 @@ static void pathAddVertex(Path* path, float x, float y)
 	VG_CHECK(path->m_CurSubPath, "No path");
 	VG_CHECK(!path->m_CurSubPath->m_IsClosed, "Cannot add new vertices to a closed path");
 
-#if 0
+#if 1
 	if (path->m_CurSubPath->m_NumVertices != 0) {
 		const uint32_t lastVertexID = path->m_CurSubPath->m_FirstVertexID + (path->m_CurSubPath->m_NumVertices - 1);
 		const float* lastVertex = &path->m_Vertices[lastVertexID << 1];
