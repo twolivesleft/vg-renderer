@@ -1115,6 +1115,8 @@ void end(Context* ctx)
     bgfx::TransientVertexBuffer uvBuffers[numVertexBuffers];
     bgfx::TransientVertexBuffer colorBuffers[numVertexBuffers];
     bgfx::TransientIndexBuffer indexBuffer;
+    GPUIndexBuffer* gpuib = nullptr;
+    bool useTransientIndexBuffer = true;
     
     for (uint32_t iVB = ctx->m_FirstVertexBufferID; iVB < numVertexBuffers; ++iVB) {
         VertexBuffer* vb = &ctx->m_VertexBuffers[iVB];
@@ -1133,8 +1135,22 @@ void end(Context* ctx)
     }
     
     IndexBuffer* ib = &ctx->m_IndexBuffers[ctx->m_ActiveIndexBufferID];
-    bgfx::allocTransientIndexBuffer(&indexBuffer, ib->m_Count);
-    bx::memCopy(indexBuffer.data, ib->m_Indices, sizeof(int16_t) * ib->m_Count);
+    const uint32_t indexCount = ib->m_Count;
+    const uint32_t availTransient = bgfx::getAvailTransientIndexBuffer(indexCount, false);
+    if (availTransient < indexCount) {
+        useTransientIndexBuffer = false;
+        gpuib = &ctx->m_GPUIndexBuffers[ctx->m_ActiveIndexBufferID];
+
+        const bgfx::Memory* mem = bgfx::copy(ib->m_Indices, sizeof(uint16_t) * indexCount);
+        if (bgfx::isValid(gpuib->m_bgfxHandle)) {
+            bgfx::update(gpuib->m_bgfxHandle, 0, mem);
+        } else {
+            gpuib->m_bgfxHandle = bgfx::createDynamicIndexBuffer(mem, BGFX_BUFFER_ALLOW_RESIZE);
+        }
+    } else {
+        bgfx::allocTransientIndexBuffer(&indexBuffer, indexCount);
+        bx::memCopy(indexBuffer.data, ib->m_Indices, sizeof(uint16_t) * indexCount);
+    }
     releaseIndexBuffer(ctx, ib->m_Indices);
 
 	const uint16_t viewID = ctx->m_ViewID;
@@ -1171,7 +1187,11 @@ void end(Context* ctx)
 
 					//GPUVertexBuffer* gpuvb = &ctx->m_GPUVertexBuffers[clipCmd->m_VertexBufferID];
                     bgfx::setVertexBuffer(0, &posBuffers[cmd->m_VertexBufferID], clipCmd->m_FirstVertexID, clipCmd->m_NumVertices);
-					bgfx::setIndexBuffer(&indexBuffer, clipCmd->m_FirstIndexID, clipCmd->m_NumIndices);
+                    if (useTransientIndexBuffer) {
+                        bgfx::setIndexBuffer(&indexBuffer, clipCmd->m_FirstIndexID, clipCmd->m_NumIndices);
+                    } else {
+                        bgfx::setIndexBuffer(gpuib->m_bgfxHandle, clipCmd->m_FirstIndexID, clipCmd->m_NumIndices);
+                    }
 
 					// Set scissor.
 					{
@@ -1217,7 +1237,11 @@ void end(Context* ctx)
 
         bgfx::setVertexBuffer(0, &posBuffers[cmd->m_VertexBufferID], cmd->m_FirstVertexID, cmd->m_NumVertices);
 		bgfx::setVertexBuffer(1, &colorBuffers[cmd->m_VertexBufferID], cmd->m_FirstVertexID, cmd->m_NumVertices);
-		bgfx::setIndexBuffer(&indexBuffer, cmd->m_FirstIndexID, cmd->m_NumIndices);
+		if (useTransientIndexBuffer) {
+			bgfx::setIndexBuffer(&indexBuffer, cmd->m_FirstIndexID, cmd->m_NumIndices);
+		} else {
+			bgfx::setIndexBuffer(gpuib->m_bgfxHandle, cmd->m_FirstIndexID, cmd->m_NumIndices);
+		}
 
 		// Set scissor.
 		{
