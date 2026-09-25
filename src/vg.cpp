@@ -3154,7 +3154,7 @@ static void ctxFillPathColor(Context* ctx, Color color, uint32_t flags)
 		for (uint32_t i = 0; i < numSubPaths; ++i) {
 			const SubPath* subPath = &subPaths[i];
 			if (subPath->m_NumVertices < 3) {
-				return;
+				continue;
 			}
 
 			const float* vtx = &pathVertices[subPath->m_FirstVertexID << 1];
@@ -3267,7 +3267,7 @@ static void ctxFillPathGradient(Context* ctx, GradientHandle gradientHandle, uin
 		for (uint32_t i = 0; i < numSubPaths; ++i) {
 			const SubPath* subPath = &subPaths[i];
 			if (subPath->m_NumVertices < 3) {
-				return;
+				continue;
 			}
 
 			const float* vtx = &pathVertices[subPath->m_FirstVertexID << 1];
@@ -3378,7 +3378,7 @@ static void ctxFillPathImagePattern(Context* ctx, ImagePatternHandle imgPatternH
 		for (uint32_t i = 0; i < numSubPaths; ++i) {
 			const SubPath* subPath = &subPaths[i];
 			if (subPath->m_NumVertices < 3) {
-				return;
+				continue;
 			}
 
 			const float* vtx = &pathVertices[subPath->m_FirstVertexID << 1];
