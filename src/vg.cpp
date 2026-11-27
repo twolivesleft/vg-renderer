@@ -354,6 +354,8 @@ struct Context
 	float m_FringeWidth;
     uint32_t m_Depth;
     uint64_t m_BlendState;
+    uint32_t m_FrontStencil;
+    uint32_t m_BackStencil;
 
 	Stroker* m_Stroker;
 	Path* m_Path;
@@ -1033,7 +1035,7 @@ void destroyContext(Context* ctx)
 	bx::alignedFree(allocator, ctx, 8);
 }
 
-void begin(Context* ctx, uint16_t viewID, uint32_t depth, uint64_t blendState, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio)
+void begin(Context* ctx, uint16_t viewID, uint32_t depth, uint64_t blendState, uint32_t frontStencil, uint32_t backStencil, uint16_t canvasWidth, uint16_t canvasHeight, float devicePixelRatio)
 {
 	ctx->m_ViewID = viewID;
 	ctx->m_CanvasWidth = canvasWidth;
@@ -1050,6 +1052,8 @@ void begin(Context* ctx, uint16_t viewID, uint32_t depth, uint64_t blendState, u
 
         
     ctx->m_BlendState = blendState;
+    ctx->m_FrontStencil = frontStencil;
+    ctx->m_BackStencil = backStencil;
     
     
 
@@ -1169,7 +1173,8 @@ void end(Context* ctx)
 	uint16_t prevScissorRect[4] = { 0, 0, canvasWidth, canvasHeight};
 	uint16_t prevScissorID = UINT16_MAX;
 	uint32_t prevClipCmdID = UINT32_MAX;
-	uint32_t stencilState = BGFX_STENCIL_NONE;
+	uint32_t stencilState = ctx->m_FrontStencil;
+	uint32_t backStencilState = ctx->m_BackStencil;
 	uint8_t nextStencilValue = 1;
 
 	for (uint32_t iCmd = 0; iCmd < numDrawCommands; ++iCmd) {
@@ -1228,10 +1233,12 @@ void end(Context* ctx)
 					| BGFX_STENCIL_OP_FAIL_S_KEEP
 					| BGFX_STENCIL_OP_FAIL_Z_KEEP
 					| BGFX_STENCIL_OP_PASS_Z_KEEP;
+				backStencilState = BGFX_STENCIL_NONE;
 
 				++nextStencilValue;
 			} else {
-				stencilState = BGFX_STENCIL_NONE;
+				stencilState = ctx->m_FrontStencil;
+				backStencilState = ctx->m_BackStencil;
 			}
 		}
 
@@ -1265,7 +1272,7 @@ void end(Context* ctx)
 				| BGFX_STATE_WRITE_A
 				| BGFX_STATE_WRITE_RGB
                 | ctx->m_BlendState);
-			bgfx::setStencil(stencilState);
+			bgfx::setStencil(stencilState, backStencilState);
 
 			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::Textured], ctx->m_Depth);
 		} else if (cmd->m_Type == DrawCommand::Type::ColorGradient) {
@@ -1281,7 +1288,7 @@ void end(Context* ctx)
                 | BGFX_STATE_WRITE_A
                 | BGFX_STATE_WRITE_RGB
                 | ctx->m_BlendState);
-			bgfx::setStencil(stencilState);
+			bgfx::setStencil(stencilState, backStencilState);
 
 			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ColorGradient], ctx->m_Depth);
 		} else if(cmd->m_Type == DrawCommand::Type::ImagePattern) {
@@ -1298,7 +1305,7 @@ void end(Context* ctx)
                 | BGFX_STATE_WRITE_A
                 | BGFX_STATE_WRITE_RGB
                 | ctx->m_BlendState);
-			bgfx::setStencil(stencilState);
+			bgfx::setStencil(stencilState, backStencilState);
 
 			bgfx::submit(viewID, ctx->m_ProgramHandle[DrawCommand::Type::ImagePattern], ctx->m_Depth);
 		} else {
